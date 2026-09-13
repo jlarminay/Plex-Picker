@@ -68,4 +68,25 @@ body {
     outline: none;
     color: var(--color-ink);
   }
+
+  /* A remote's D-pad moves focus the way a keyboard does — this needs to be
+     unmistakable from a couch, not the faint default browser outline. */
+  a,
+  button,
+  input,
+  select,
+  summary,
+  [tabindex] {
+    outline: none;
+  }
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  summary:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 3px solid var(--color-clay);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
 }

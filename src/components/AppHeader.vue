@@ -17,9 +17,24 @@ const statusText = computed(() => {
 
 const menuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
+const avatarButtonRef = ref<HTMLElement | null>(null)
 
 function onWindowClick(event: MouseEvent) {
   if (menuRef.value && !menuRef.value.contains(event.target as Node)) menuOpen.value = false
+}
+
+// Navigating past the last item closes the menu instead of leaving it open
+// while focus jumps off to something unrelated further down the page.
+function onDropdownKeydown(event: KeyboardEvent) {
+  if (event.key !== 'ArrowDown') return
+  const container = event.currentTarget as HTMLElement
+  const items = Array.from(container.querySelectorAll<HTMLElement>('button:not([disabled])'))
+  const last = items[items.length - 1]
+  if (document.activeElement !== last) return
+  event.preventDefault()
+  event.stopPropagation()
+  menuOpen.value = false
+  avatarButtonRef.value?.focus()
 }
 
 onMounted(() => window.addEventListener('click', onWindowClick))
@@ -53,6 +68,7 @@ async function onLogout() {
         </div>
         <div v-if="account" ref="menuRef" class="relative">
           <button
+            ref="avatarButtonRef"
             class="grid h-8.5 w-8.5 cursor-pointer place-items-center overflow-hidden rounded-full border border-border-1 bg-panel p-0 font-mono text-xs font-medium text-ink"
             @click.stop="menuOpen = !menuOpen"
           >
@@ -62,6 +78,7 @@ async function onLogout() {
           <div
             v-if="menuOpen"
             class="absolute top-[calc(100%+10px)] right-0 z-20 grid min-w-47.5 gap-0.5 border border-border-4 bg-cream p-2 text-left"
+            @keydown="onDropdownKeydown"
           >
             <p class="m-0 px-2.5 pt-2 pb-1.5 font-mono text-[11px] text-muted-4">{{ account.username }}</p>
             <button v-if="connected" class="cursor-pointer border-0 bg-transparent p-2.5 text-left text-ink hover:bg-black/5" :disabled="loading" @click="onRefresh">
