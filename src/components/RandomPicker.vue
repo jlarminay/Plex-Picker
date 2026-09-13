@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { vAutoAnimate } from "@formkit/auto-animate/vue";
-import { ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
 import { useMovieLibrary } from "../composables/useMovieLibrary";
 import { useRandomPicker } from "../composables/useRandomPicker";
 import SlotReel from "./SlotReel.vue";
@@ -25,10 +25,23 @@ const {
 const settledCount = ref(0);
 const allSettled = ref(true);
 const revealInfo = ref(false);
-watch(pickedMovies, (movies) => {
+const resultsRef = ref<HTMLElement | null>(null);
+const findButtonRef = ref<HTMLElement | null>(null);
+watch(pickedMovies, async (movies, previous) => {
   settledCount.value = 0;
   allSettled.value = movies.length === 0;
   revealInfo.value = false;
+  if (movies.length && !previous?.length) {
+    await nextTick();
+    // Focus (not just scroll) the grid itself: the Retry button stays
+    // disabled — and so unfocusable — for the whole spin, and D-pad nav
+    // only centers whatever currently holds focus.
+    resultsRef.value?.focus();
+    resultsRef.value?.scrollIntoView({ block: "center", behavior: "smooth" });
+  } else if (!movies.length && previous?.length) {
+    await nextTick();
+    findButtonRef.value?.focus();
+  }
 });
 function onReelSettled() {
   settledCount.value++;
@@ -52,6 +65,7 @@ function onReelSettled() {
         <div v-auto-animate class="grid justify-items-center gap-2.5">
           <template v-if="!pickedMovies.length" key="actions-setup">
             <button
+              ref="findButtonRef"
               class="flex h-14 w-auto items-center overflow-hidden border-0 bg-ink px-6 py-4 text-left text-button-text cursor-pointer"
               @click="findMoviesToWatch"
             >
@@ -89,24 +103,17 @@ function onReelSettled() {
       </p>
 
       <div v-if="advancedOpen" class="mt-1.5 grid w-full max-w-180 gap-5.5">
+        <label class="flex items-center gap-2.5 font-mono text-xs text-muted-5">
+          <input type="checkbox" v-model="pickerHideWatched" class="w-auto" />
+          Hide already watched
+        </label>
         <div class="grid gap-2.5">
-          <p class="m-0 font-mono text-[11px] text-muted-3">Genres</p>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="genre in genres"
-              :key="genre"
-              type="button"
-              class="cursor-pointer rounded-full border border-border-2 px-3.5 py-1.75 font-mono text-xs text-muted-5"
-              :class="
-                pickerGenres.includes(genre)
-                  ? 'border-ink bg-ink text-button-text'
-                  : 'bg-transparent'
-              "
-              @click="togglePickerGenre(genre)"
-            >
-              {{ genre }}
-            </button>
-          </div>
+          <p class="m-0 font-mono text-[11px] text-muted-3">Duration</p>
+          <select v-model="pickerDuration" class="max-w-60">
+            <option value="any">Any length</option>
+            <option value="under120">Under 2 hours</option>
+            <option value="under90">Under 90 minutes</option>
+          </select>
         </div>
         <div class="grid gap-2.5">
           <p class="m-0 font-mono text-[11px] text-muted-3">Decades</p>
@@ -124,6 +131,25 @@ function onReelSettled() {
               @click="togglePickerDecade(decade)"
             >
               {{ decade }}s
+            </button>
+          </div>
+        </div>
+        <div class="grid gap-2.5">
+          <p class="m-0 font-mono text-[11px] text-muted-3">Genres</p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="genre in genres"
+              :key="genre"
+              type="button"
+              class="cursor-pointer rounded-full border border-border-2 px-3.5 py-1.75 font-mono text-xs text-muted-5"
+              :class="
+                pickerGenres.includes(genre)
+                  ? 'border-ink bg-ink text-button-text'
+                  : 'bg-transparent'
+              "
+              @click="togglePickerGenre(genre)"
+            >
+              {{ genre }}
             </button>
           </div>
         </div>
@@ -146,25 +172,15 @@ function onReelSettled() {
             </button>
           </div>
         </div>
-        <div class="grid gap-2.5">
-          <p class="m-0 font-mono text-[11px] text-muted-3">Duration</p>
-          <select v-model="pickerDuration" class="max-w-60">
-            <option value="any">Any length</option>
-            <option value="under120">Under 2 hours</option>
-            <option value="under90">Under 90 minutes</option>
-          </select>
-        </div>
-        <label class="flex items-center gap-2.5 font-mono text-xs text-muted-5">
-          <input type="checkbox" v-model="pickerHideWatched" class="w-auto" />
-          Hide already watched
-        </label>
       </div>
     </div>
 
     <div
       v-else
       key="results"
-      class="grid grid-cols-2 gap-5 md:grid-cols-3 lg:grid-cols-5"
+      ref="resultsRef"
+      tabindex="0"
+      class="grid grid-cols-2 gap-5 sm:grid-cols-5"
     >
       <SlotReel
         v-for="movie in pickedMovies"

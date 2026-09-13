@@ -1,44 +1,13 @@
 <script setup lang="ts">
 import { vAutoAnimate } from "@formkit/auto-animate/vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import {
-  formatDuration,
-  useMovieLibrary,
-  type Movie,
-} from "../composables/useMovieLibrary";
+import { formatDuration, type Movie } from "../composables/useMovieLibrary";
 
 const props = defineProps<{ movie: Movie; reveal: boolean }>();
 const emit = defineEmits<{ settled: [] }>();
 
-const { movies } = useMovieLibrary();
-
-function shuffle<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
-const DISTRACTOR_COUNT = 8;
-const totalTicks = 16 + Math.floor(Math.random() * 12); // 16-27 frames before landing — more to cycle through over the longer spin
-const basePool = shuffle(
-  movies.value.filter((candidate) => candidate !== props.movie),
-).slice(0, DISTRACTOR_COUNT);
-
-const reelItems: Movie[] = [];
-if (basePool.length) {
-  while (reelItems.length < totalTicks) reelItems.push(...shuffle(basePool));
-  reelItems.length = totalTicks;
-}
-reelItems.push(props.movie);
-
-const ready = ref(false);
-const displayIndex = ref(0);
-const spinDuration = ref(0);
-const viewportRef = ref<HTMLElement | null>(null);
-const itemHeight = ref(0);
+const posterVisible = ref(false);
+const fadeIn = ref(false);
 
 let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -51,47 +20,30 @@ function preload(url: string): Promise<void> {
   });
 }
 
-async function waitForImages() {
-  const urls = reelItems
-    .map((item) => item.thumb)
-    .filter((url): url is string => Boolean(url));
-  if (!urls.length) return;
-  const loaded = Promise.all(urls.map(preload));
-  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 3000));
-  await Promise.race([loaded, timeout]);
-}
-
 // Wait for the browser to actually paint the current (at-rest) frame before
-// changing styles again — otherwise two style writes in the same tick get
-// coalesced into one frame and the CSS transition never visibly plays.
+// flipping the opacity class — otherwise the image mounts and fades in on
+// the same frame and no transition is visible.
 function nextPaint(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
 }
 
-function spin() {
-  const lastIndex = reelItems.length - 1;
-  if (lastIndex <= 0) {
-    emit("settled");
-    return;
-  }
-  // One continuous slide across the whole reel — a fast-start, evenly-decelerating
-  // curve reads as a single smooth spin rather than a series of little hops.
-  // Widely randomized per reel so the five columns clearly stop at different times.
-  spinDuration.value = 5000 + Math.random() * 5000;
-  displayIndex.value = lastIndex;
-  timeoutId = setTimeout(() => {
-    emit("settled");
-  }, spinDuration.value);
-}
-
 onMounted(async () => {
-  itemHeight.value = viewportRef.value?.getBoundingClientRect().height ?? 0;
-  await waitForImages();
-  ready.value = true;
-  await nextPaint();
-  spin();
+  const loaded = props.movie.thumb
+    ? preload(props.movie.thumb)
+    : Promise.resolve();
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 3000));
+  await Promise.race([loaded, timeout]);
+
+  // Spin for a random 5-10s so the five columns clearly stop at different times.
+  const spinDuration = 5000 + Math.random() * 5000;
+  timeoutId = setTimeout(async () => {
+    posterVisible.value = true;
+    await nextPaint();
+    fadeIn.value = true;
+    emit("settled");
+  }, spinDuration);
 });
 onBeforeUnmount(() => {
   if (timeoutId) clearTimeout(timeoutId);
@@ -100,41 +52,27 @@ onBeforeUnmount(() => {
 
 <template>
   <article>
-    <div ref="viewportRef" class="aspect-2/3 w-full overflow-hidden bg-imgbg">
-      <div v-if="!ready" class="grid h-full w-full place-items-center">
+    <div class="aspect-2/3 w-full overflow-hidden bg-imgbg">
+      <div v-if="!posterVisible" class="grid h-full w-full place-items-center">
         <span
-          class="h-6 w-6 animate-spin rounded-full border-2 border-muted-3 border-t-transparent"
+          class="h-8 w-8 animate-spin rounded-full border-2 border-muted-3 border-t-transparent"
         ></span>
       </div>
-      <div
-        v-else
-        class="flex flex-col"
-        :style="{
-          transform: `translateY(-${displayIndex * itemHeight}px)`,
-          transitionProperty: 'transform',
-          transitionDuration: spinDuration + 'ms',
-          transitionTimingFunction: 'cubic-bezier(0.33, 1, 0.68, 1)',
-        }"
-      >
+      <template v-else>
+        <img
+          v-if="movie.thumb"
+          :src="movie.thumb"
+          :alt="movie.title"
+          class="h-full w-full object-cover opacity-0 transition-opacity duration-700"
+          :class="{ 'opacity-100': fadeIn }"
+        />
         <div
-          v-for="(item, index) in reelItems"
-          :key="index"
-          class="aspect-2/3 w-full shrink-0"
+          v-else
+          class="grid h-full w-full place-items-center font-serif text-[40px] text-muted-3"
         >
-          <img
-            v-if="item.thumb"
-            :src="item.thumb"
-            :alt="item.title"
-            class="h-full w-full object-cover"
-          />
-          <div
-            v-else
-            class="grid h-full w-full place-items-center font-serif text-[40px] text-muted-3"
-          >
-            {{ item.title.slice(0, 1) }}
-          </div>
+          {{ movie.title.slice(0, 1) }}
         </div>
-      </div>
+      </template>
     </div>
     <div v-auto-animate class="pt-2.5">
       <template v-if="reveal">

@@ -40,6 +40,14 @@ body {
   margin: 0;
 }
 
+/* The Android TV WebView renders everything a touch large for a 10-foot
+   display — scale the whole page down slightly. `zoom` (not `transform`)
+   keeps layout/scroll sizing correct, and our only Chromium-based target
+   (Android WebView) supports it. */
+html {
+  zoom: 0.9;
+}
+
 @layer base {
   h1,
   h2,
