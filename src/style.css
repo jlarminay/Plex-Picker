@@ -1,0 +1,71 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,600;1,600;1,700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Space Grotesk", sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-mono: "DM Mono", monospace;
+
+  --color-ink: #17201c;
+  --color-paper: #e9ebe5;
+  --color-panel: #d4ddd1;
+  --color-cream: #f4f1e8;
+  --color-clay: #b24727;
+  --color-error: #a33e2d;
+  --color-live: #2d9a65;
+
+  --color-muted-1: #727b73;
+  --color-muted-2: #657067;
+  --color-muted-3: #69766d;
+  --color-muted-4: #778078;
+  --color-muted-5: #4c554e;
+
+  --color-border-1: #b9c0b7;
+  --color-border-2: #9fac9f;
+  --color-border-3: #9ba39b;
+  --color-border-4: #c2c9c0;
+
+  --color-track: #dde2d9;
+  --color-imgbg: #bec4b9;
+  --color-button-text: #f2f0e8;
+}
+
+:root {
+  color: var(--color-ink);
+  background: var(--color-paper);
+  font-family: var(--font-sans);
+  font-synthesis: none;
+}
+body {
+  margin: 0;
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  p {
+    margin-top: 0;
+  }
+  h2 {
+    font-size: 34px;
+    letter-spacing: -0.05em;
+    margin-bottom: 12px;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+  input,
+  select {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid var(--color-border-2);
+    background: transparent;
+    padding: 11px 0;
+    outline: none;
+    color: var(--color-ink);
+  }
+}
