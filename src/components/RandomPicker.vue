@@ -14,11 +14,14 @@ const {
   pickerDuration,
   pickerHideWatched,
   pickedMovies,
+  heldFlags,
   noPickerMatches,
   togglePickerGenre,
   togglePickerDecade,
   togglePickerCountry,
   findMoviesToWatch,
+  toggleHold,
+  rerollPicker,
   retryPicker,
 } = useRandomPicker();
 
@@ -27,10 +30,19 @@ const allSettled = ref(true);
 const revealInfo = ref(false);
 const resultsRef = ref<HTMLElement | null>(null);
 const findButtonRef = ref<HTMLElement | null>(null);
+
+// Held reels keep their existing movie (same v-for :key, so they never
+// remount/re-spin) and so never re-fire "settled" — only wait on the ones
+// that are actually spinning this round.
+function spinningCount(list: typeof pickedMovies.value) {
+  return list.filter((_, index) => !heldFlags.value[index]).length;
+}
+
 watch(pickedMovies, async (movies, previous) => {
   settledCount.value = 0;
-  allSettled.value = movies.length === 0;
-  revealInfo.value = false;
+  const spinning = spinningCount(movies);
+  allSettled.value = spinning === 0;
+  revealInfo.value = spinning === 0;
   if (movies.length && !previous?.length) {
     await nextTick();
     // Focus (not just scroll) the grid itself: the Retry button stays
@@ -45,7 +57,7 @@ watch(pickedMovies, async (movies, previous) => {
 });
 function onReelSettled() {
   settledCount.value++;
-  if (settledCount.value >= pickedMovies.value.length) {
+  if (settledCount.value >= spinningCount(pickedMovies.value)) {
     allSettled.value = true;
     revealInfo.value = true;
   }
@@ -79,15 +91,22 @@ function onReelSettled() {
               {{ advancedOpen ? "Hide" : "Show" }} advanced options
             </button>
           </template>
-          <button
-            v-else
-            key="actions-retry"
-            class="flex h-14 w-auto items-center overflow-hidden border-0 bg-ink px-6 py-4 text-left text-button-text cursor-pointer disabled:cursor-wait disabled:opacity-50"
-            :disabled="!allSettled"
-            @click="retryPicker"
-          >
-            {{ allSettled ? "Retry" : "Spinning…" }}
-          </button>
+          <div v-else key="actions-results" class="flex gap-2.5">
+            <button
+              class="flex h-14 w-auto items-center overflow-hidden border border-ink bg-transparent px-6 py-4 text-left text-ink cursor-pointer disabled:cursor-wait disabled:opacity-50"
+              :disabled="!allSettled"
+              @click="retryPicker"
+            >
+              Reset
+            </button>
+            <button
+              class="flex h-14 w-auto items-center overflow-hidden border-0 bg-ink px-6 py-4 text-left text-button-text cursor-pointer disabled:cursor-wait disabled:opacity-50"
+              :disabled="!allSettled"
+              @click="rerollPicker"
+            >
+              {{ allSettled ? "Re-roll" : "Spinning…" }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -183,11 +202,14 @@ function onReelSettled() {
       class="grid grid-cols-2 gap-5 sm:grid-cols-5"
     >
       <SlotReel
-        v-for="movie in pickedMovies"
+        v-for="(movie, index) in pickedMovies"
         :key="movie.title + movie.year"
         :movie="movie"
-        :reveal="revealInfo"
+        :reveal="heldFlags[index] || revealInfo"
+        :held="heldFlags[index]"
+        :spinning="!allSettled"
         @settled="onReelSettled"
+        @toggle-hold="toggleHold(index)"
       />
     </div>
   </section>

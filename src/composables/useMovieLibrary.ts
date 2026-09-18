@@ -105,11 +105,12 @@ const byDecade = computed(() => {
 
 const DURATION_BUCKETS: Array<{ label: string; matches: (minutes: number) => boolean }> = [
   { label: 'Under 30m', matches: (m) => m < 30 },
-  { label: '30–60m', matches: (m) => m >= 30 && m < 60 },
-  { label: '60–90m', matches: (m) => m >= 60 && m < 90 },
-  { label: '90–120m', matches: (m) => m >= 90 && m < 120 },
-  { label: '120m+', matches: (m) => m >= 120 },
 ]
+for (let start = 30; start < 120; start += 15) {
+  const end = start + 15
+  DURATION_BUCKETS.push({ label: `${start}–${end}m`, matches: (m) => m >= start && m < end })
+}
+DURATION_BUCKETS.push({ label: '120m+', matches: (m) => m >= 120 })
 
 const byDuration = computed<Array<[string, number]>>(() => {
   const counts = DURATION_BUCKETS.map(() => 0)

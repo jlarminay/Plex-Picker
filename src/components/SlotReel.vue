@@ -3,8 +3,13 @@ import { vAutoAnimate } from "@formkit/auto-animate/vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { formatDuration, type Movie } from "../composables/useMovieLibrary";
 
-const props = defineProps<{ movie: Movie; reveal: boolean }>();
-const emit = defineEmits<{ settled: [] }>();
+const props = defineProps<{
+  movie: Movie;
+  reveal: boolean;
+  held: boolean;
+  spinning: boolean;
+}>();
+const emit = defineEmits<{ settled: []; "toggle-hold": [] }>();
 
 const posterVisible = ref(false);
 const fadeIn = ref(false);
@@ -36,14 +41,11 @@ onMounted(async () => {
   const timeout = new Promise<void>((resolve) => setTimeout(resolve, 3000));
   await Promise.race([loaded, timeout]);
 
-  // Spin for a random 5-10s so the five columns clearly stop at different times.
-  const spinDuration = 5000 + Math.random() * 5000;
-  timeoutId = setTimeout(async () => {
-    posterVisible.value = true;
-    await nextPaint();
-    fadeIn.value = true;
-    emit("settled");
-  }, spinDuration);
+  // Artificial spin delay disabled for now — reveal as soon as the image is ready.
+  posterVisible.value = true;
+  await nextPaint();
+  fadeIn.value = true;
+  emit("settled");
 });
 onBeforeUnmount(() => {
   if (timeoutId) clearTimeout(timeoutId);
@@ -87,16 +89,31 @@ onBeforeUnmount(() => {
             · <span class="pr-0.5">★</span>{{ movie.rating.toFixed(1) }}
           </template>
         </p>
-        <p class="mb-0.75 font-mono text-[11px] text-muted-4">
+        <p class="mb-0.75 truncate font-mono text-[11px] text-muted-4">
           {{ movie.genres.join(" / ") || "Uncategorized" }}
         </p>
-        <small class="block font-mono text-[11px] text-muted-4">
+        <small
+          class="block line-clamp-2 min-h-[2.6em] font-mono text-[11px] leading-[1.3] text-muted-4"
+        >
           {{
             movie.directors.length
               ? "dir. " + movie.directors.join(", ")
               : "Director unknown"
           }}
         </small>
+        <button
+          type="button"
+          class="mt-2 flex h-8 w-full cursor-pointer items-center justify-center border font-mono text-[11px] tracking-[0.08em] uppercase disabled:cursor-not-allowed disabled:opacity-50"
+          :class="
+            held
+              ? 'border-ink bg-ink text-button-text'
+              : 'border-border-2 bg-transparent text-muted-5'
+          "
+          :disabled="spinning"
+          @click="emit('toggle-hold')"
+        >
+          {{ held ? "Held" : "Hold" }}
+        </button>
       </template>
     </div>
   </article>
