@@ -9,11 +9,17 @@ const advancedOpen = ref(false)
 const pickerGenres = ref<string[]>([])
 const pickerDecades = ref<number[]>([])
 const pickerCountries = ref<string[]>([])
+const pickerCollection = ref('')
 const pickerDuration = ref<DurationFilter>('any')
 const pickerHideWatched = ref(false)
 const pickedMovies = ref<Movie[]>([])
 const heldFlags = ref<boolean[]>([])
+// A per-slot id for the v-for :key, deliberately independent of the movie's
+// own identity — see pickIds below.
+const pickIds = ref<number[]>([])
 const noPickerMatches = ref(false)
+const matchCount = ref(0)
+let nextPickId = 0
 
 function toggleInList<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((entry) => entry !== value) : [...list, value]
@@ -29,6 +35,23 @@ function togglePickerDecade(decade: number) {
 
 function togglePickerCountry(country: string) {
   pickerCountries.value = toggleInList(pickerCountries.value, country)
+}
+
+// Content identity (Plex can list the same film twice — duplicate files, or
+// the same title across two library sections) — used to keep one film out of
+// two slots at once. Deliberately NOT used as the v-for :key; see pickIds.
+function movieKey(movie: Movie): string {
+  return movie.title + movie.year
+}
+
+function dedupeByKey(list: Movie[]): Movie[] {
+  const seen = new Set<string>()
+  return list.filter((movie) => {
+    const key = movieKey(movie)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function shuffle<T>(items: T[]): T[] {
@@ -47,6 +70,7 @@ function matchesFilters(movie: Movie): boolean {
     if (decade === null || !pickerDecades.value.includes(decade)) return false
   }
   if (pickerCountries.value.length && !movie.countries.some((country) => pickerCountries.value.includes(country))) return false
+  if (pickerCollection.value && !(movie.collections ?? []).includes(pickerCollection.value)) return false
   if (pickerDuration.value === 'under120' && !(movie.duration !== null && movie.duration < 120)) return false
   if (pickerDuration.value === 'under90' && !(movie.duration !== null && movie.duration < 90)) return false
   if (pickerHideWatched.value && movie.watched) return false
@@ -54,7 +78,8 @@ function matchesFilters(movie: Movie): boolean {
 }
 
 function findMoviesToWatch() {
-  const pool = movies.value.filter(matchesFilters)
+  const pool = dedupeByKey(movies.value.filter(matchesFilters))
+  matchCount.value = pool.length
   if (!pool.length) {
     noPickerMatches.value = true
     pickedMovies.value = []
@@ -64,6 +89,7 @@ function findMoviesToWatch() {
   noPickerMatches.value = false
   pickedMovies.value = shuffle(pool).slice(0, 5)
   heldFlags.value = pickedMovies.value.map(() => false)
+  pickIds.value = pickedMovies.value.map(() => nextPickId++)
 }
 
 function toggleHold(index: number) {
@@ -72,16 +98,23 @@ function toggleHold(index: number) {
   heldFlags.value = next
 }
 
-// Re-picks only the slots that aren't held, leaving held movies untouched
-// (same object references, so their SlotReel keeps its v-for :key and never
-// remounts/re-spins).
+// Re-picks only the slots that aren't held, leaving held movies untouched —
+// their pickIds entry is carried over unchanged, so their SlotReel keeps its
+// v-for :key and never remounts/re-spins. Rerolled slots always get a fresh
+// id, even if the new pick happens to be a movie that was already showing:
+// keying by the movie itself would let Vue reuse that old, already-settled
+// SlotReel instance instead of mounting a new one — it would never fire
+// "settled" again, and the whole row would wait forever for it.
 function rerollPicker() {
   const heldMovies = pickedMovies.value.filter((_, index) => heldFlags.value[index])
   const rerollCount = pickedMovies.value.length - heldMovies.length
   if (!rerollCount) return
 
-  const heldTitles = new Set(heldMovies.map((movie) => movie.title + movie.year))
-  const pool = movies.value.filter((movie) => matchesFilters(movie) && !heldTitles.has(movie.title + movie.year))
+  const allMatches = dedupeByKey(movies.value.filter(matchesFilters))
+  matchCount.value = allMatches.length
+
+  const heldKeys = new Set(heldMovies.map(movieKey))
+  const pool = allMatches.filter((movie) => !heldKeys.has(movieKey(movie)))
   if (!pool.length) {
     noPickerMatches.value = true
     return
@@ -91,23 +124,28 @@ function rerollPicker() {
 
   const newMovies: Movie[] = []
   const newHeld: boolean[] = []
+  const newIds: number[] = []
   let freshIndex = 0
   for (let index = 0; index < pickedMovies.value.length; index++) {
     if (heldFlags.value[index]) {
       newMovies.push(pickedMovies.value[index])
       newHeld.push(true)
+      newIds.push(pickIds.value[index])
     } else if (freshIndex < fresh.length) {
       newMovies.push(fresh[freshIndex++])
       newHeld.push(false)
+      newIds.push(nextPickId++)
     }
   }
   pickedMovies.value = newMovies
   heldFlags.value = newHeld
+  pickIds.value = newIds
 }
 
 function retryPicker() {
   pickedMovies.value = []
   heldFlags.value = []
+  pickIds.value = []
   noPickerMatches.value = false
 }
 
@@ -117,11 +155,14 @@ export function useRandomPicker() {
     pickerGenres,
     pickerDecades,
     pickerCountries,
+    pickerCollection,
     pickerDuration,
     pickerHideWatched,
     pickedMovies,
     heldFlags,
+    pickIds,
     noPickerMatches,
+    matchCount,
     togglePickerGenre,
     togglePickerDecade,
     togglePickerCountry,

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
+    "@capacitor/app-launcher": "^8.0.1",
     "@capacitor/core": "^8.5.2",
     "@formkit/auto-animate": "^0.10.0",
     "cors": "^2.8.5",

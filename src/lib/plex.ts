@@ -106,12 +106,14 @@ type PlexItem = {
   Genre?: Array<{ tag?: string }> | { tag?: string }
   Director?: Array<{ tag?: string }> | { tag?: string }
   Country?: Array<{ tag?: string }> | { tag?: string }
+  Collection?: Array<{ tag?: string }> | { tag?: string }
   rating?: number
   duration?: number
   summary?: string
   studio?: string
   thumb?: string
   key?: string
+  ratingKey?: number | string
   addedAt?: number
   originallyAvailableAt?: string
   viewCount?: number
@@ -137,12 +139,14 @@ async function plexFetch(path: string) {
 
 function normalize(item: PlexItem): Movie {
   return {
+    ratingKey: item.ratingKey !== undefined ? String(item.ratingKey) : null,
     title: item.title ?? 'Untitled',
     year: item.year ?? null,
     releaseDate: item.originallyAvailableAt ?? null,
     genres: asArray(item.Genre).map((entry) => entry.tag).filter((tag): tag is string => Boolean(tag)),
     directors: asArray(item.Director).map((entry) => entry.tag).filter((tag): tag is string => Boolean(tag)),
     countries: asArray(item.Country).map((entry) => entry.tag).filter((tag): tag is string => Boolean(tag)),
+    collections: asArray(item.Collection).map((entry) => entry.tag).filter((tag): tag is string => Boolean(tag)),
     rating: item.rating ?? null,
     duration: item.duration ? Math.round(item.duration / 60000) : null,
     summary: item.summary ?? '',

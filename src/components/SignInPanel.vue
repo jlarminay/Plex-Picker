@@ -8,8 +8,8 @@ const { signingIn, manualUrl, manualToken, startPlexSignIn, manualConnect } =
 </script>
 
 <template>
-  <section class="mb-11.5 bg-panel p-9 max-md:p-6.5">
-    <p class="mb-4.5 font-mono text-[11px] tracking-[0.12em] text-muted-1">
+  <section class="mb-11.5 bg-panel px-10.5 py-6 max-md:p-6.5">
+    <p class="mb-2 font-mono text-[11px] tracking-[0.12em] text-muted-1">
       REMOTE LIBRARY
     </p>
     <div

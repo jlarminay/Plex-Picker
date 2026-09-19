@@ -2,25 +2,21 @@
 import { useMovieLibrary } from '../composables/useMovieLibrary'
 
 const { movies, stats } = useMovieLibrary()
+
+const items = () => [
+  { value: movies.value.length, label: 'films in library' },
+  { value: stats.value.years, label: 'release years' },
+  { value: stats.value.genres, label: 'genres' },
+  { value: stats.value.directors, label: 'directors' },
+  { value: stats.value.countries, label: 'countries' },
+]
 </script>
 
 <template>
-  <section class="my-10.5 grid grid-cols-4 border-b border-border-4 max-md:grid-cols-2 max-md:gap-y-5.5">
-    <div tabindex="0" class="mr-5.5 border-r border-border-4 pr-5.5 pb-5">
-      <strong class="block text-[32px] tracking-[-0.06em]">{{ movies.length }}</strong>
-      <span class="font-mono text-[11px] text-muted-4">films in library</span>
-    </div>
-    <div tabindex="0" class="mr-5.5 border-r border-border-4 pr-5.5 pb-5 max-md:border-0">
-      <strong class="block text-[32px] tracking-[-0.06em]">{{ stats.years }}</strong>
-      <span class="font-mono text-[11px] text-muted-4">release years</span>
-    </div>
-    <div tabindex="0" class="mr-5.5 border-r border-border-4 pr-5.5 pb-5">
-      <strong class="block text-[32px] tracking-[-0.06em]">{{ stats.genres }}</strong>
-      <span class="font-mono text-[11px] text-muted-4">genres</span>
-    </div>
-    <div tabindex="0" class="pb-5">
-      <strong class="block text-[32px] tracking-[-0.06em]">{{ stats.directors }}</strong>
-      <span class="font-mono text-[11px] text-muted-4">directors</span>
+  <section class="grid grid-cols-5 gap-y-6 bg-cream px-10.5 py-6 max-md:p-6.5 text-center max-md:grid-cols-2">
+    <div v-for="item in items()" :key="item.label">
+      <strong class="block text-[32px] tracking-[-0.06em]">{{ item.value }}</strong>
+      <span class="font-mono text-[11px] text-muted-4">{{ item.label }}</span>
     </div>
   </section>
 </template>

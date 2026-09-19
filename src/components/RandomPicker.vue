@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { vAutoAnimate } from "@formkit/auto-animate/vue";
-import { nextTick, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMovieLibrary } from "../composables/useMovieLibrary";
 import { useRandomPicker } from "../composables/useRandomPicker";
 import SlotReel from "./SlotReel.vue";
 
-const { genres, countries, byDecade } = useMovieLibrary();
+const { genres, countries, collections, byDecade } = useMovieLibrary();
 const {
   advancedOpen,
   pickerGenres,
   pickerDecades,
   pickerCountries,
+  pickerCollection,
   pickerDuration,
   pickerHideWatched,
   pickedMovies,
   heldFlags,
+  pickIds,
   noPickerMatches,
+  matchCount,
   togglePickerGenre,
   togglePickerDecade,
   togglePickerCountry,
@@ -28,8 +31,8 @@ const {
 const settledCount = ref(0);
 const allSettled = ref(true);
 const revealInfo = ref(false);
-const resultsRef = ref<HTMLElement | null>(null);
 const findButtonRef = ref<HTMLElement | null>(null);
+const rerollButtonRef = ref<HTMLElement | null>(null);
 
 // Held reels keep their existing movie (same v-for :key, so they never
 // remount/re-spin) and so never re-fire "settled" — only wait on the ones
@@ -43,18 +46,48 @@ watch(pickedMovies, async (movies, previous) => {
   const spinning = spinningCount(movies);
   allSettled.value = spinning === 0;
   revealInfo.value = spinning === 0;
-  if (movies.length && !previous?.length) {
-    await nextTick();
-    // Focus (not just scroll) the grid itself: the Retry button stays
-    // disabled — and so unfocusable — for the whole spin, and D-pad nav
-    // only centers whatever currently holds focus.
-    resultsRef.value?.focus();
-    resultsRef.value?.scrollIntoView({ block: "center", behavior: "smooth" });
-  } else if (!movies.length && previous?.length) {
+  if (!movies.length && previous?.length) {
     await nextTick();
     findButtonRef.value?.focus();
+  } else if (movies.length && !previous?.length) {
+    await nextTick();
+    rerollButtonRef.value?.focus();
   }
 });
+onMounted(() => findButtonRef.value?.focus());
+// Leaving the page starts fresh — otherwise old picks would re-spin on return.
+onBeforeUnmount(retryPicker);
+// The results are a grid: one column per movie, poster on top and Hold below.
+// Arrow keys move within that grid instead of the global linear order, and
+// stop at its edges rather than spilling out onto unrelated controls.
+const ARROWS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+function onGridKeydown(event: KeyboardEvent) {
+  if (!ARROWS.includes(event.key)) return;
+  const active = document.activeElement as HTMLElement | null;
+  const row = active?.dataset.nav;
+  const grid = event.currentTarget as HTMLElement;
+  if (!active || (row !== "poster" && row !== "hold")) return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  const column = active.closest("article");
+  const columns = Array.from(grid.children) as HTMLElement[];
+  const index = column ? columns.indexOf(column as HTMLElement) : -1;
+  const inColumn = (col: HTMLElement | undefined, kind: string) =>
+    col?.querySelector<HTMLElement>(`[data-nav="${kind}"]`) ?? null;
+
+  let target: HTMLElement | null = null;
+  if (event.key === "ArrowLeft") target = inColumn(columns[index - 1], row);
+  else if (event.key === "ArrowRight") target = inColumn(columns[index + 1], row);
+  else if (event.key === "ArrowDown") target = row === "poster" ? inColumn(columns[index], "hold") : null;
+  else if (row === "hold") target = inColumn(columns[index], "poster");
+  else target = rerollButtonRef.value;
+
+  if (!target) return;
+  active.blur();
+  target.focus();
+}
+
 function onReelSettled() {
   settledCount.value++;
   if (settledCount.value >= spinningCount(pickedMovies.value)) {
@@ -65,11 +98,8 @@ function onReelSettled() {
 </script>
 
 <template>
-  <section v-auto-animate class="mb-11.5 bg-cream p-10.5 max-md:p-6.5">
-    <div class="mb-5.5">
-      <p class="mb-4.5 font-mono text-[11px] tracking-[0.12em] text-muted-1">
-        TONIGHT'S SUGGESTION
-      </p>
+  <section v-auto-animate class="bg-cream px-10.5 py-6 max-md:p-6.5">
+    <div class="mb-3">
       <div
         class="grid grid-cols-[1fr_auto] gap-6 max-md:grid-cols-1 max-md:gap-4"
       >
@@ -91,18 +121,22 @@ function onReelSettled() {
               {{ advancedOpen ? "Hide" : "Show" }} advanced options
             </button>
           </template>
-          <div v-else key="actions-results" class="flex gap-2.5">
+          <div v-else key="actions-results" class="flex items-center gap-2.5">
+            <p class="m-0 mr-3 font-mono text-[11px] text-muted-4">
+              ({{ matchCount }} movie{{ matchCount === 1 ? "" : "s" }} found)
+            </p>
             <button
-              class="flex h-14 w-auto items-center overflow-hidden border border-ink bg-transparent px-6 py-4 text-left text-ink cursor-pointer disabled:cursor-wait disabled:opacity-50"
-              :disabled="!allSettled"
-              @click="retryPicker"
+              class="flex h-14 w-auto items-center overflow-hidden border border-ink bg-transparent px-6 py-4 text-left text-ink cursor-pointer aria-disabled:cursor-wait aria-disabled:opacity-50"
+              :aria-disabled="!allSettled"
+              @click="allSettled && retryPicker()"
             >
               Reset
             </button>
             <button
-              class="flex h-14 w-auto items-center overflow-hidden border-0 bg-ink px-6 py-4 text-left text-button-text cursor-pointer disabled:cursor-wait disabled:opacity-50"
-              :disabled="!allSettled"
-              @click="rerollPicker"
+              ref="rerollButtonRef"
+              class="flex h-14 w-auto items-center overflow-hidden border-0 bg-ink px-6 py-4 text-left text-button-text cursor-pointer aria-disabled:cursor-wait aria-disabled:opacity-50"
+              :aria-disabled="!allSettled"
+              @click="allSettled && rerollPicker()"
             >
               {{ allSettled ? "Re-roll" : "Spinning…" }}
             </button>
@@ -132,6 +166,19 @@ function onReelSettled() {
             <option value="any">Any length</option>
             <option value="under120">Under 2 hours</option>
             <option value="under90">Under 90 minutes</option>
+          </select>
+        </div>
+        <div v-if="collections.length" class="grid gap-2.5">
+          <p class="m-0 font-mono text-[11px] text-muted-3">Collection</p>
+          <select v-model="pickerCollection" class="max-w-60">
+            <option value="">Any collection</option>
+            <option
+              v-for="collection in collections"
+              :key="collection"
+              :value="collection"
+            >
+              {{ collection }}
+            </option>
           </select>
         </div>
         <div class="grid gap-2.5">
@@ -194,23 +241,19 @@ function onReelSettled() {
       </div>
     </div>
 
-    <div
-      v-else
-      key="results"
-      ref="resultsRef"
-      tabindex="0"
-      class="grid grid-cols-2 gap-5 sm:grid-cols-5"
-    >
-      <SlotReel
-        v-for="(movie, index) in pickedMovies"
-        :key="movie.title + movie.year"
-        :movie="movie"
-        :reveal="heldFlags[index] || revealInfo"
-        :held="heldFlags[index]"
-        :spinning="!allSettled"
-        @settled="onReelSettled"
-        @toggle-hold="toggleHold(index)"
-      />
-    </div>
+    <template v-else key="results">
+      <div class="grid grid-cols-2 gap-5 sm:grid-cols-5" @keydown="onGridKeydown">
+        <SlotReel
+          v-for="(movie, index) in pickedMovies"
+          :key="pickIds[index]"
+          :movie="movie"
+          :reveal="heldFlags[index] || revealInfo"
+          :held="heldFlags[index]"
+          :spinning="!allSettled"
+          @settled="onReelSettled"
+          @toggle-hold="toggleHold(index)"
+        />
+      </div>
+    </template>
   </section>
 </template>

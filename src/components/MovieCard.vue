@@ -35,7 +35,9 @@ withDefaults(defineProps<{ movie: Movie; variant?: "grid" | "pick" }>(), {
         <p class="mb-0.75 font-mono text-[11px] text-muted-4">
           {{ movie.genres.join(" / ") || "Uncategorized" }}
         </p>
-        <small class="block font-mono text-[11px] text-muted-4">
+        <small
+          class="block line-clamp-2 min-h-[2.6em] font-mono text-[11px] leading-[1.3] text-muted-4"
+        >
           {{
             movie.directors.length
               ? "dir. " + movie.directors.join(", ")

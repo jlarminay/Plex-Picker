@@ -5,12 +5,14 @@ import { indexMovies } from '../lib/plex'
 import { useAsyncStatus } from './useAsyncStatus'
 
 export type Movie = {
+  ratingKey: string | null
   title: string
   year: number | null
   releaseDate: string | null
   genres: string[]
   directors: string[]
   countries: string[]
+  collections: string[]
   rating: number | null
   duration: number | null
   summary: string
@@ -45,6 +47,17 @@ watch(sortBy, (key) => {
 
 const genres = computed(() => [...new Set(movies.value.flatMap((movie) => movie.genres))].sort())
 const countries = computed(() => [...new Set(movies.value.flatMap((movie) => movie.countries))].sort())
+// `?? []` guards against a library cached before this field existed. A "_"
+// prefix is a common Plex convention for pinning a collection to the top of
+// its own sort order — honor that here instead of sorting it in with the rest.
+const collections = computed(() =>
+  [...new Set(movies.value.flatMap((movie) => movie.collections ?? []))].sort((a, b) => {
+    const aPinned = a.startsWith('_')
+    const bPinned = b.startsWith('_')
+    if (aPinned !== bPinned) return aPinned ? -1 : 1
+    return a.localeCompare(b)
+  }),
+)
 
 const filtered = computed(() =>
   movies.value.filter(
@@ -82,6 +95,7 @@ const stats = computed(() => ({
   years: new Set(movies.value.map((movie) => movie.year).filter(Boolean)).size,
   genres: new Set(movies.value.flatMap((movie) => movie.genres)).size,
   directors: new Set(movies.value.flatMap((movie) => movie.directors)).size,
+  countries: new Set(movies.value.flatMap((movie) => movie.countries)).size,
 }))
 
 function topCounts(values: string[], limit: number): Array<[string, number]> {
@@ -168,7 +182,8 @@ async function loadMovies() {
   const server = getSession().server
   if (server) {
     const cached = loadCachedMovies(server.clientIdentifier)
-    if (cached) {
+    // A cache written before ratingKey/collections existed lacks them — re-index once.
+    if (cached && (cached.length === 0 || 'ratingKey' in cached[0])) {
       movies.value = cached
       return
     }
@@ -201,6 +216,7 @@ export function useMovieLibrary() {
     sortDir,
     genres,
     countries,
+    collections,
     filtered,
     sorted,
     visibleMovies,
