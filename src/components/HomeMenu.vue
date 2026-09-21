@@ -15,13 +15,13 @@ onMounted(() => pickButtonRef.value?.focus())
     <div class="mx-auto flex w-[70%] justify-between gap-6 max-md:w-full max-md:flex-col">
       <button
         ref="pickButtonRef"
-        class="flex h-20 flex-1 cursor-pointer items-center justify-center border-0 bg-ink px-8 text-center text-2xl text-button-text"
+        class="flex h-20 min-h-20 flex-1 cursor-pointer items-center justify-center border-0 bg-ink px-8 text-center text-2xl text-button-text"
         @click="goTo('pick')"
       >
         Pick a movie
       </button>
       <button
-        class="flex h-20 flex-1 cursor-pointer items-center justify-center border border-ink bg-transparent px-8 text-center text-2xl text-ink"
+        class="flex h-20 min-h-20 flex-1 cursor-pointer items-center justify-center border border-ink bg-transparent px-8 text-center text-2xl text-ink"
         @click="goTo('stats')"
       >
         See stats

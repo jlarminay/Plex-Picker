@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { vAutoAnimate } from "@formkit/auto-animate/vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { formatDuration, type Movie } from "../composables/useMovieLibrary";
+import { formatDuration, useMovieLibrary, type Movie } from "../composables/useMovieLibrary";
+import { isTv } from "../lib/device";
 import { canOpenInPlex, openInPlex } from "../lib/openInPlex";
 
 const props = defineProps<{
@@ -27,6 +28,40 @@ async function onSeeMore() {
     setTimeout(() => (seeMoreState.value = "idle"), 2500);
   }
 }
+
+const { movies } = useMovieLibrary();
+
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+// The slot effect: a vertical strip of other posters that slides and lands on
+// the real pick. Skipped on TV, where the reveal is immediate. Disabled
+// everywhere for now — it was too laggy on the tablet.
+const SLOT_EFFECT = false;
+const DISTRACTOR_COUNT = 8;
+const totalTicks = 16 + Math.floor(Math.random() * 12);
+const reelItems: Movie[] = [];
+if (SLOT_EFFECT && !isTv) {
+  const basePool = shuffle(
+    movies.value.filter((candidate) => candidate.thumb && candidate !== props.movie),
+  ).slice(0, DISTRACTOR_COUNT);
+  if (basePool.length) {
+    while (reelItems.length < totalTicks) reelItems.push(...shuffle(basePool));
+    reelItems.length = totalTicks;
+    reelItems.push(props.movie);
+  }
+}
+const hasReel = reelItems.length > 1;
+const viewportRef = ref<HTMLElement | null>(null);
+const itemHeight = ref(0);
+const displayIndex = ref(0);
+const spinDuration = ref(0);
 
 const posterVisible = ref(false);
 const posterLinkable = computed(
@@ -55,17 +90,26 @@ function nextPaint(): Promise<void> {
 }
 
 onMounted(async () => {
-  const loaded = props.movie.thumb
-    ? preload(props.movie.thumb)
-    : Promise.resolve();
+  itemHeight.value = viewportRef.value?.getBoundingClientRect().height ?? 0;
+  const urls = (hasReel ? reelItems : [props.movie])
+    .map((item) => item.thumb)
+    .filter((url): url is string => Boolean(url));
+  const loaded = Promise.all(urls.map(preload));
   const timeout = new Promise<void>((resolve) => setTimeout(resolve, 3000));
   await Promise.race([loaded, timeout]);
 
-  // Artificial spin delay disabled for now — reveal as soon as the image is ready.
   posterVisible.value = true;
   await nextPaint();
-  fadeIn.value = true;
-  emit("settled");
+  if (hasReel) {
+    // One continuous slide across the whole strip, randomized per reel so
+    // the columns stop at different times.
+    spinDuration.value = 5000 + Math.random() * 5000;
+    displayIndex.value = reelItems.length - 1;
+    timeoutId = setTimeout(() => emit("settled"), spinDuration.value);
+  } else {
+    fadeIn.value = true;
+    emit("settled");
+  }
 });
 onBeforeUnmount(() => {
   if (timeoutId) clearTimeout(timeoutId);
@@ -73,13 +117,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <article>
+  <article class="@container">
     <component
       :is="posterLinkable ? 'button' : 'div'"
       :type="posterLinkable ? 'button' : undefined"
       :aria-label="posterLinkable ? `Open ${movie.title} in Plex` : undefined"
       :data-nav="posterLinkable ? 'poster' : undefined"
-      class="relative block aspect-2/3 w-full overflow-hidden border-0 bg-imgbg p-0"
+      ref="viewportRef"
+      class="relative block aspect-2/3 w-full portrait:aspect-auto portrait:h-[calc(150cqw-15px)] overflow-hidden border-0 bg-imgbg p-0"
       :class="{ 'cursor-pointer': posterLinkable }"
       @click="posterLinkable && onSeeMore()"
     >
@@ -89,8 +134,31 @@ onBeforeUnmount(() => {
         ></span>
       </div>
       <template v-else>
+        <div
+          v-if="hasReel"
+          class="flex flex-col"
+          :style="{
+            transform: `translateY(-${displayIndex * itemHeight}px)`,
+            transitionProperty: 'transform',
+            transitionDuration: spinDuration + 'ms',
+            transitionTimingFunction: 'cubic-bezier(0.33, 1, 0.68, 1)',
+          }"
+        >
+          <div
+            v-for="(item, index) in reelItems"
+            :key="index"
+            class="w-full shrink-0"
+            :style="{ height: itemHeight + 'px' }"
+          >
+            <img
+              :src="item.thumb!"
+              :alt="item.title"
+              class="h-full w-full object-cover"
+            />
+          </div>
+        </div>
         <img
-          v-if="movie.thumb"
+          v-else-if="movie.thumb"
           :src="movie.thumb"
           :alt="movie.title"
           class="h-full w-full object-cover opacity-0 transition-opacity duration-700"
@@ -112,8 +180,9 @@ onBeforeUnmount(() => {
     </component>
     <div v-auto-animate class="pt-2.5">
       <template v-if="reveal">
+        <div>
         <h3
-          class="mb-1.25 line-clamp-2 min-h-[2.6em] text-[15px] leading-[1.3]"
+          class="mb-1.25 line-clamp-2 min-h-[2.6em] portrait:line-clamp-1 portrait:min-h-0 text-[15px] leading-[1.3]"
         >
           {{ movie.title }}
         </h3>
@@ -126,6 +195,7 @@ onBeforeUnmount(() => {
         <p class="mb-0.75 truncate font-mono text-[11px] text-muted-4">
           {{ movie.genres.join(" / ") || "Uncategorized" }}
         </p>
+        </div>
         <!-- director line hidden for now to keep the whole card on screen
         <small
           class="block line-clamp-2 min-h-[2.6em] font-mono text-[11px] leading-[1.3] text-muted-4"

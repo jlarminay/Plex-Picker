@@ -8,6 +8,8 @@ const { movies } = useMovieLibrary()
 const advancedOpen = ref(false)
 const pickerGenres = ref<string[]>([])
 const pickerDecades = ref<number[]>([])
+// Specific calendar years (this year / last year), OR-ed with the decades.
+const pickerYears = ref<number[]>([])
 const pickerCountries = ref<string[]>([])
 const pickerCollection = ref('')
 const pickerDuration = ref<DurationFilter>('any')
@@ -31,6 +33,10 @@ function togglePickerGenre(genre: string) {
 
 function togglePickerDecade(decade: number) {
   pickerDecades.value = toggleInList(pickerDecades.value, decade)
+}
+
+function togglePickerYear(year: number) {
+  pickerYears.value = toggleInList(pickerYears.value, year)
 }
 
 function togglePickerCountry(country: string) {
@@ -65,9 +71,11 @@ function shuffle<T>(items: T[]): T[] {
 
 function matchesFilters(movie: Movie): boolean {
   if (pickerGenres.value.length && !movie.genres.some((genre) => pickerGenres.value.includes(genre))) return false
-  if (pickerDecades.value.length) {
+  if (pickerDecades.value.length || pickerYears.value.length) {
     const decade = movie.year ? Math.floor(movie.year / 10) * 10 : null
-    if (decade === null || !pickerDecades.value.includes(decade)) return false
+    const inDecade = decade !== null && pickerDecades.value.includes(decade)
+    const inYear = movie.year !== null && pickerYears.value.includes(movie.year)
+    if (!inDecade && !inYear) return false
   }
   if (pickerCountries.value.length && !movie.countries.some((country) => pickerCountries.value.includes(country))) return false
   if (pickerCollection.value && !(movie.collections ?? []).includes(pickerCollection.value)) return false
@@ -87,7 +95,7 @@ function findMoviesToWatch() {
     return
   }
   noPickerMatches.value = false
-  pickedMovies.value = shuffle(pool).slice(0, 5)
+  pickedMovies.value = shuffle(pool).slice(0, window.matchMedia('(orientation: portrait)').matches ? 6 : 5)
   heldFlags.value = pickedMovies.value.map(() => false)
   pickIds.value = pickedMovies.value.map(() => nextPickId++)
 }
@@ -154,6 +162,7 @@ export function useRandomPicker() {
     advancedOpen,
     pickerGenres,
     pickerDecades,
+    pickerYears,
     pickerCountries,
     pickerCollection,
     pickerDuration,
@@ -165,6 +174,7 @@ export function useRandomPicker() {
     matchCount,
     togglePickerGenre,
     togglePickerDecade,
+    togglePickerYear,
     togglePickerCountry,
     findMoviesToWatch,
     toggleHold,

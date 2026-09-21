@@ -10,6 +10,7 @@ const {
   advancedOpen,
   pickerGenres,
   pickerDecades,
+  pickerYears,
   pickerCountries,
   pickerCollection,
   pickerDuration,
@@ -21,12 +22,19 @@ const {
   matchCount,
   togglePickerGenre,
   togglePickerDecade,
+  togglePickerYear,
   togglePickerCountry,
   findMoviesToWatch,
   toggleHold,
   rerollPicker,
   retryPicker,
 } = useRandomPicker();
+
+const thisYear = new Date().getFullYear();
+const recentYears = [
+  { label: "Last year", year: thisYear - 1 },
+  { label: "This year", year: thisYear },
+];
 
 const settledCount = ref(0);
 const allSettled = ref(true);
@@ -78,8 +86,10 @@ function onGridKeydown(event: KeyboardEvent) {
 
   let target: HTMLElement | null = null;
   if (event.key === "ArrowLeft") target = inColumn(columns[index - 1], row);
-  else if (event.key === "ArrowRight") target = inColumn(columns[index + 1], row);
-  else if (event.key === "ArrowDown") target = row === "poster" ? inColumn(columns[index], "hold") : null;
+  else if (event.key === "ArrowRight")
+    target = inColumn(columns[index + 1], row);
+  else if (event.key === "ArrowDown")
+    target = row === "poster" ? inColumn(columns[index], "hold") : null;
   else if (row === "hold") target = inColumn(columns[index], "poster");
   else target = rerollButtonRef.value;
 
@@ -103,7 +113,15 @@ function onReelSettled() {
       <div
         class="grid grid-cols-[1fr_auto] gap-6 max-md:grid-cols-1 max-md:gap-4"
       >
-        <h2>Not sure what to watch?</h2>
+        <div class="flex items-baseline gap-3 -mb-2">
+          <h2 class="portrait:mb-0">Not sure what to watch?</h2>
+          <p
+            v-if="pickedMovies.length"
+            class="m-0 hidden font-mono text-[11px] text-muted-4 portrait:block"
+          >
+            ({{ matchCount }} movie{{ matchCount === 1 ? "" : "s" }} found)
+          </p>
+        </div>
         <div v-auto-animate class="grid justify-items-center gap-2.5">
           <template v-if="!pickedMovies.length" key="actions-setup">
             <button
@@ -122,7 +140,9 @@ function onReelSettled() {
             </button>
           </template>
           <div v-else key="actions-results" class="flex items-center gap-2.5">
-            <p class="m-0 mr-3 font-mono text-[11px] text-muted-4">
+            <p
+              class="m-0 mr-3 font-mono portrait:hidden text-[11px] text-muted-4"
+            >
               ({{ matchCount }} movie{{ matchCount === 1 ? "" : "s" }} found)
             </p>
             <button
@@ -198,6 +218,20 @@ function onReelSettled() {
             >
               {{ decade }}s
             </button>
+            <button
+              v-for="recent in recentYears"
+              :key="recent.year"
+              type="button"
+              class="cursor-pointer rounded-full border border-border-2 px-3.5 py-1.75 font-mono text-xs text-muted-5"
+              :class="
+                pickerYears.includes(recent.year)
+                  ? 'border-ink bg-ink text-button-text'
+                  : 'bg-transparent'
+              "
+              @click="togglePickerYear(recent.year)"
+            >
+              {{ recent.label }}
+            </button>
           </div>
         </div>
         <div class="grid gap-2.5">
@@ -242,7 +276,10 @@ function onReelSettled() {
     </div>
 
     <template v-else key="results">
-      <div class="grid grid-cols-2 gap-5 sm:grid-cols-5" @keydown="onGridKeydown">
+      <div
+        class="grid grid-cols-2 gap-5 sm:grid-cols-5 portrait:grid-cols-3"
+        @keydown="onGridKeydown"
+      >
         <SlotReel
           v-for="(movie, index) in pickedMovies"
           :key="pickIds[index]"

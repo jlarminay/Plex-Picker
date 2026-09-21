@@ -25,7 +25,7 @@ onBeforeUnmount(stopDpadNavigation)
 
 <template>
   <main
-    class="mx-auto flex max-w-305 flex-col px-[5vw] pt-10.5 max-md:px-5.5 max-md:pt-6.5"
+    class="mx-auto flex max-w-305 flex-col px-[5vw] pt-7.5 max-md:px-5.5 max-md:pt-6.5"
     :class="
       scrolls
         ? 'min-h-[calc(100vh/0.9)] pb-10 max-md:pb-8'
