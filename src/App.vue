@@ -8,6 +8,7 @@ import HomeMenu from './components/HomeMenu.vue'
 import PageBar from './components/PageBar.vue'
 import RandomPicker from './components/RandomPicker.vue'
 import LibraryAnalytics from './components/LibraryAnalytics.vue'
+import ListSync from './components/ListSync.vue'
 // import MovieGrid from './components/MovieGrid.vue' // disabled: duplicates Plex's own browsing UI
 // import EmptyState from './components/EmptyState.vue' // disabled: nothing shown below the sign-in box for now
 import { usePlexAuth } from './composables/usePlexAuth'
@@ -15,7 +16,7 @@ import { useView } from './composables/useView'
 
 const { account, connected, refreshStatus } = usePlexAuth()
 const { view } = useView()
-const scrolls = computed(() => connected.value && view.value === 'stats')
+const scrolls = computed(() => connected.value && (view.value === 'stats' || view.value === 'sync'))
 
 onMounted(refreshStatus)
 
@@ -42,6 +43,11 @@ onBeforeUnmount(stopDpadNavigation)
     <template v-else-if="view === 'pick'">
       <PageBar />
       <RandomPicker />
+    </template>
+
+    <template v-else-if="view === 'sync'">
+      <PageBar />
+      <ListSync />
     </template>
 
     <template v-else>

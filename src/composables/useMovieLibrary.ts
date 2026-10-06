@@ -1,11 +1,13 @@
 import { computed, ref, watch } from 'vue'
 import { getSession } from '../lib/localSession'
 import { loadCachedMovies, saveCachedMovies } from '../lib/movieCache'
-import { indexMovies } from '../lib/plex'
+import { getMovieCollections, indexMovies, type PlexCollection } from '../lib/plex'
 import { useAsyncStatus } from './useAsyncStatus'
 
 export type Movie = {
   ratingKey: string | null
+  sectionKey: string | null
+  tmdbId: string | null
   title: string
   year: number | null
   releaseDate: string | null
@@ -47,17 +49,32 @@ watch(sortBy, (key) => {
 
 const genres = computed(() => [...new Set(movies.value.flatMap((movie) => movie.genres))].sort())
 const countries = computed(() => [...new Set(movies.value.flatMap((movie) => movie.countries))].sort())
-// `?? []` guards against a library cached before this field existed. A "_"
-// prefix is a common Plex convention for pinning a collection to the top of
-// its own sort order — honor that here instead of sorting it in with the rest.
-const collections = computed(() =>
-  [...new Set(movies.value.flatMap((movie) => movie.collections ?? []))].sort((a, b) => {
-    const aPinned = a.startsWith('_')
-    const bPinned = b.startsWith('_')
-    if (aPinned !== bPinned) return aPinned ? -1 : 1
-    return a.localeCompare(b)
-  }),
-)
+// Plex's own collection list, shared by the picker's filter and the list sync.
+// Loaded from the home page so both always see the same, current set.
+const collections = ref<PlexCollection[]>([])
+const collectionsLoading = ref(false)
+const collectionsError = ref('')
+
+// A "_" prefix is a common Plex convention for pinning a collection to the top
+// of its own sort order — honor that here instead of sorting it in with the rest.
+function compareCollections(a: PlexCollection, b: PlexCollection) {
+  const aPinned = a.title.startsWith('_')
+  const bPinned = b.title.startsWith('_')
+  if (aPinned !== bPinned) return aPinned ? -1 : 1
+  return a.title.localeCompare(b.title)
+}
+
+async function loadCollections() {
+  collectionsLoading.value = true
+  collectionsError.value = ''
+  try {
+    collections.value = (await getMovieCollections()).sort(compareCollections)
+  } catch (reason) {
+    collectionsError.value = reason instanceof Error ? reason.message : 'Unable to load your Plex collections.'
+  } finally {
+    collectionsLoading.value = false
+  }
+}
 
 const filtered = computed(() =>
   movies.value.filter(
@@ -182,8 +199,8 @@ async function loadMovies() {
   const server = getSession().server
   if (server) {
     const cached = loadCachedMovies(server.clientIdentifier)
-    // A cache written before ratingKey/collections existed lacks them — re-index once.
-    if (cached && (cached.length === 0 || 'ratingKey' in cached[0])) {
+    // A cache written before tmdbId/sectionKey existed lacks them — re-index once.
+    if (cached && (cached.length === 0 || 'tmdbId' in cached[0])) {
       movies.value = cached
       return
     }
@@ -195,12 +212,27 @@ async function refreshLibrary() {
   loading.value = true
   error.value = ''
   try {
-    await fetchAndCacheMovies()
+    await Promise.all([fetchAndCacheMovies(), loadCollections()])
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : 'Unable to refresh the library.'
   } finally {
     loading.value = false
   }
+}
+
+// Mirrors a collection edit into the indexed library (and its cache), so the
+// picker's collection filter is current without re-indexing everything.
+function applyCollectionChange(title: string, addedKeys: string[], removedKeys: string[]) {
+  const added = new Set(addedKeys)
+  const removed = new Set(removedKeys)
+  movies.value = movies.value.map((movie) => {
+    if (!movie.ratingKey) return movie
+    if (added.has(movie.ratingKey) && !movie.collections.includes(title)) return { ...movie, collections: [...movie.collections, title] }
+    if (removed.has(movie.ratingKey)) return { ...movie, collections: movie.collections.filter((name) => name !== title) }
+    return movie
+  })
+  const server = getSession().server
+  if (server) saveCachedMovies(server.clientIdentifier, movies.value)
 }
 
 function resetMovies() {
@@ -217,6 +249,9 @@ export function useMovieLibrary() {
     genres,
     countries,
     collections,
+    collectionsLoading,
+    collectionsError,
+    loadCollections,
     filtered,
     sorted,
     visibleMovies,
@@ -237,7 +272,9 @@ export function useMovieLibrary() {
     maxRatingCount,
     abbreviateDirectorName,
     loadMovies,
+    fetchAndCacheMovies,
     refreshLibrary,
+    applyCollectionChange,
     resetMovies,
   }
 }

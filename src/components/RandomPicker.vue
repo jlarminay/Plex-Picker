@@ -109,15 +109,21 @@ function onReelSettled() {
 
 <template>
   <section v-auto-animate class="bg-cream px-10.5 py-6 max-md:p-6.5">
-    <div class="mb-3">
+    <div class="relative mb-3">
       <div
         class="grid grid-cols-[1fr_auto] gap-6 max-md:grid-cols-1 max-md:gap-4"
       >
-        <div class="flex items-baseline gap-3 -mb-2">
-          <h2 class="portrait:mb-0">Not sure what to watch?</h2>
+        <div
+          class="flex items-baseline gap-3 -mb-2 max-tablet:flex-col max-tablet:items-center max-tablet:gap-1 max-tablet:text-center"
+        >
+          <!-- hidden once the slots are showing, to give them the room -->
+          <h2 v-if="!pickedMovies.length" class="portrait:mb-0 max-tablet:text-[33px] max-tablet:tracking-[-0.06em]">Not sure what to watch?</h2>
+          <!-- Centered across the full width on every device. In landscape it
+               overlays the row beside the buttons instead of adding a line, so
+               the slots keep their height on the TV. -->
           <p
             v-if="pickedMovies.length"
-            class="m-0 hidden font-mono text-[11px] text-muted-4 portrait:block"
+            class="m-0 w-full text-center font-mono text-[13px] text-muted-4 landscape:pointer-events-none landscape:absolute landscape:inset-x-0 landscape:top-0 landscape:flex landscape:h-14 landscape:items-center landscape:justify-center"
           >
             ({{ matchCount }} movie{{ matchCount === 1 ? "" : "s" }} found)
           </p>
@@ -140,11 +146,6 @@ function onReelSettled() {
             </button>
           </template>
           <div v-else key="actions-results" class="flex items-center gap-2.5">
-            <p
-              class="m-0 mr-3 font-mono portrait:hidden text-[11px] text-muted-4"
-            >
-              ({{ matchCount }} movie{{ matchCount === 1 ? "" : "s" }} found)
-            </p>
             <button
               class="flex h-14 w-auto items-center overflow-hidden border border-ink bg-transparent px-6 py-4 text-left text-ink cursor-pointer aria-disabled:cursor-wait aria-disabled:opacity-50"
               :aria-disabled="!allSettled"
@@ -194,10 +195,10 @@ function onReelSettled() {
             <option value="">Any collection</option>
             <option
               v-for="collection in collections"
-              :key="collection"
-              :value="collection"
+              :key="collection.ratingKey"
+              :value="collection.title"
             >
-              {{ collection }}
+              {{ collection.title }}
             </option>
           </select>
         </div>

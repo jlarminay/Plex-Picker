@@ -6,6 +6,10 @@
   --font-serif: "Playfair Display", serif;
   --font-mono: "DM Mono", monospace;
 
+  /* Splits phones (~411px wide) from the tablet (~601px). Media queries ignore
+     the html zoom below, so these are real viewport widths. */
+  --breakpoint-tablet: 32rem;
+
   --color-ink: #17201c;
   --color-paper: #e9ebe5;
   --color-panel: #d4ddd1;

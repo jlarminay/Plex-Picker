@@ -101,16 +101,17 @@ export async function resolveConnection(resource: PlexResource): Promise<string>
 // ---- Plex Media Server library queries ----
 
 type PlexItem = {
-  title?: string
+  title?: string | number
   year?: number
   Genre?: Array<{ tag?: string }> | { tag?: string }
   Director?: Array<{ tag?: string }> | { tag?: string }
   Country?: Array<{ tag?: string }> | { tag?: string }
   Collection?: Array<{ tag?: string }> | { tag?: string }
+  Guid?: Array<{ id?: string }> | { id?: string }
   rating?: number
   duration?: number
-  summary?: string
-  studio?: string
+  summary?: string | number
+  studio?: string | number
   thumb?: string
   key?: string
   ratingKey?: number | string
@@ -131,16 +132,27 @@ function plexUrl(path: string): string {
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', parseAttributeValue: true, htmlEntities: true })
 
-async function plexFetch(path: string) {
-  const response = await fetch(plexUrl(path), { headers: { Accept: 'application/xml' } })
+async function plexFetch(path: string, method = 'GET') {
+  const response = await fetch(plexUrl(path), { method, headers: { Accept: 'application/xml' } })
   if (!response.ok) throw new Error(`Plex returned ${response.status} ${response.statusText}`)
-  return parser.parse(await response.text())
+  const text = await response.text()
+  return text ? parser.parse(text) : {}
 }
 
-function normalize(item: PlexItem): Movie {
+// Guids look like "tmdb://496243" — only present when requested with includeGuids=1.
+function tmdbIdOf(item: PlexItem): string | null {
+  const guid = asArray(item.Guid).map((entry) => String(entry.id ?? '')).find((id) => id.startsWith('tmdb://'))
+  return guid ? guid.slice('tmdb://'.length) : null
+}
+
+// parseAttributeValue turns numeric-looking attributes into numbers, so a film
+// titled "1917" arrives as 1917 — text fields are coerced back to strings here.
+function normalize(item: PlexItem, sectionKey: string): Movie {
   return {
     ratingKey: item.ratingKey !== undefined ? String(item.ratingKey) : null,
-    title: item.title ?? 'Untitled',
+    sectionKey,
+    tmdbId: tmdbIdOf(item),
+    title: String(item.title ?? 'Untitled'),
     year: item.year ?? null,
     releaseDate: item.originallyAvailableAt ?? null,
     genres: asArray(item.Genre).map((entry) => entry.tag).filter((tag): tag is string => Boolean(tag)),
@@ -149,27 +161,103 @@ function normalize(item: PlexItem): Movie {
     collections: asArray(item.Collection).map((entry) => entry.tag).filter((tag): tag is string => Boolean(tag)),
     rating: item.rating ?? null,
     duration: item.duration ? Math.round(item.duration / 60000) : null,
-    summary: item.summary ?? '',
-    studio: item.studio ?? '',
+    summary: String(item.summary ?? ''),
+    studio: String(item.studio ?? ''),
     thumb: item.thumb ? plexUrl(item.thumb) : null,
     addedAt: item.addedAt ?? null,
     watched: Boolean(item.viewCount),
   }
 }
 
-export async function indexMovies(): Promise<Movie[]> {
+async function movieSectionKeys(): Promise<string[]> {
   const libraries = await plexFetch('/library/sections')
-  const directories = asArray(libraries.MediaContainer?.Directory) as Array<{ type?: string; key?: string }>
-  const movieLibraries = directories.filter((directory) => directory.type === 'movie')
-  const items = (
+  const directories = asArray(libraries.MediaContainer?.Directory) as Array<{ type?: string; key?: string | number }>
+  return directories.filter((directory) => directory.type === 'movie').map((directory) => String(directory.key))
+}
+
+export async function indexMovies(): Promise<Movie[]> {
+  const sections = await movieSectionKeys()
+  return (
     await Promise.all(
-      movieLibraries.map(async (library) => {
-        const result = await plexFetch(`/library/sections/${library.key}/all`)
-        return asArray(result.MediaContainer?.Video) as PlexItem[]
+      sections.map(async (sectionKey) => {
+        const result = await plexFetch(`/library/sections/${sectionKey}/all?includeGuids=1`)
+        return (asArray(result.MediaContainer?.Video) as PlexItem[]).map((item) => normalize(item, sectionKey))
       }),
     )
   ).flat()
-  return items.map(normalize)
+}
+
+// ---- Collections (used by the Letterboxd list sync) ----
+
+export type PlexCollection = { ratingKey: string; title: string; sectionKey: string }
+
+// Smart collections are filter-driven and can't have items added or removed, so they're left out.
+export async function getMovieCollections(): Promise<PlexCollection[]> {
+  const sections = await movieSectionKeys()
+  return (
+    await Promise.all(
+      sections.map(async (sectionKey) => {
+        const result = await plexFetch(`/library/sections/${sectionKey}/collections`)
+        const directories = asArray(result.MediaContainer?.Directory) as Array<{ ratingKey?: string | number; title?: string | number; smart?: number | boolean }>
+        return directories
+          .filter((directory) => directory.ratingKey !== undefined && !directory.smart)
+          .map((directory) => ({ ratingKey: String(directory.ratingKey), title: String(directory.title ?? 'Untitled'), sectionKey }))
+      }),
+    )
+  ).flat()
+}
+
+export async function getCollectionItemKeys(collectionKey: string): Promise<string[]> {
+  const result = await plexFetch(`/library/collections/${collectionKey}/children`)
+  return (asArray(result.MediaContainer?.Video) as PlexItem[])
+    .map((item) => (item.ratingKey !== undefined ? String(item.ratingKey) : ''))
+    .filter(Boolean)
+}
+
+// Collection edits reference items by a server:// URI, which needs the server's machine identifier.
+// Asked for directly rather than read from the session, since a manual connection doesn't store it.
+async function getMachineIdentifier(): Promise<string> {
+  const result = await plexFetch('/identity')
+  const id = result.MediaContainer?.machineIdentifier
+  if (!id) throw new Error('Plex did not report a server identifier.')
+  return String(id)
+}
+
+function itemsUri(machineIdentifier: string, ratingKeys: string[]): string {
+  return `server://${machineIdentifier}/com.plexapp.plugins.library/library/metadata/${ratingKeys.join(',')}`
+}
+
+// Keeps each request's URL a sensible length for big lists.
+const EDIT_CHUNK_SIZE = 50
+const chunks = <T,>(values: T[]): T[][] =>
+  Array.from({ length: Math.ceil(values.length / EDIT_CHUNK_SIZE) }, (_, index) => values.slice(index * EDIT_CHUNK_SIZE, (index + 1) * EDIT_CHUNK_SIZE))
+
+export async function addToCollection(collectionKey: string, ratingKeys: string[]): Promise<void> {
+  if (!ratingKeys.length) return
+  const machineIdentifier = await getMachineIdentifier()
+  for (const chunk of chunks(ratingKeys)) {
+    await plexFetch(`/library/collections/${collectionKey}/items?uri=${encodeURIComponent(itemsUri(machineIdentifier, chunk))}`, 'PUT')
+  }
+}
+
+export async function removeFromCollection(collectionKey: string, ratingKeys: string[]): Promise<void> {
+  for (const ratingKey of ratingKeys) {
+    await plexFetch(`/library/collections/${collectionKey}/items/${ratingKey}`, 'DELETE')
+  }
+}
+
+// Plex won't create an empty collection, so it's created with its first batch of items.
+export async function createCollection(title: string, sectionKey: string, ratingKeys: string[]): Promise<string> {
+  if (!ratingKeys.length) throw new Error('A new collection needs at least one movie that is on your server.')
+  const machineIdentifier = await getMachineIdentifier()
+  const [first, ...rest] = chunks(ratingKeys)
+  const params = new URLSearchParams({ type: '1', title, smart: '0', sectionId: sectionKey, uri: itemsUri(machineIdentifier, first) })
+  const result = await plexFetch(`/library/collections?${params.toString()}`, 'POST')
+  const created = asArray(result.MediaContainer?.Directory)[0] as { ratingKey?: string | number } | undefined
+  if (created?.ratingKey === undefined) throw new Error('Plex did not return the new collection.')
+  const collectionKey = String(created.ratingKey)
+  await addToCollection(collectionKey, rest.flat())
+  return collectionKey
 }
 
 export async function verifyManualConnection(uri: string, accessToken: string): Promise<void> {

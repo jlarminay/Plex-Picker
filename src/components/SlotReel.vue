@@ -188,9 +188,10 @@ onBeforeUnmount(() => {
         </h3>
         <p class="mb-1 font-mono text-[11px] text-muted-4">
           {{ movie.year ?? "—" }} · {{ formatDuration(movie.duration) }}
-          <template v-if="movie.rating">
+          <!-- hidden on phones, where it wraps the line -->
+          <span v-if="movie.rating" class="max-tablet:hidden">
             · <span class="pr-0.5">★</span>{{ movie.rating.toFixed(1) }}
-          </template>
+          </span>
         </p>
         <p class="mb-0.75 truncate font-mono text-[11px] text-muted-4">
           {{ movie.genres.join(" / ") || "Uncategorized" }}

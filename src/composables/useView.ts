@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-export type View = 'home' | 'pick' | 'stats'
+export type View = 'home' | 'pick' | 'stats' | 'sync'
 
 const view = ref<View>('home')
 

@@ -13,7 +13,7 @@ const { goTo } = useView()
 const busy = computed(() => loading.value)
 const statusText = computed(() => {
   if (loading.value) return connected.value ? 'Refreshing…' : 'Connecting…'
-  if (connected.value) return `${movies.value.length} films indexed`
+  if (connected.value) return `${movies.value.length} films`
   return account.value ? 'Choose a server' : 'Not connected'
 })
 
@@ -63,7 +63,7 @@ async function onLogout() {
           class="mr-2 inline-block h-1.75 w-1.75 animate-spin rounded-full border border-muted-1 border-t-transparent"
         ></span>
         <span v-else class="mr-2 inline-block h-1.75 w-1.75 rounded-full" :class="connected ? 'bg-live' : 'bg-border-3'"></span>
-        {{ statusText }}
+        {{ statusText }}<span v-if="connected && !loading" class="max-tablet:hidden">&nbsp;indexed</span>
       </div>
       <div v-if="account" ref="menuRef" class="relative">
         <button
