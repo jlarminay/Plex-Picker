@@ -10,6 +10,8 @@ const { movies, refreshLibrary } = useMovieLibrary()
 const { account, connected, logout } = usePlexAuth()
 const { goTo } = useView()
 
+const appVersion = __APP_VERSION__
+
 const busy = computed(() => loading.value)
 const statusText = computed(() => {
   if (loading.value) return connected.value ? 'Refreshing…' : 'Connecting…'
@@ -80,7 +82,10 @@ async function onLogout() {
           class="absolute top-[calc(100%+10px)] right-0 z-20 grid min-w-47.5 gap-0.5 border border-border-4 bg-cream p-2 text-left"
           @keydown="onDropdownKeydown"
         >
-          <p class="m-0 px-2.5 pt-2 pb-1.5 font-mono text-[11px] text-muted-4">{{ account.username }}</p>
+          <p class="m-0 flex justify-between gap-4 px-2.5 pt-2 pb-1.5 font-mono text-[11px] text-muted-4">
+            <span>{{ account.username }}</span>
+            <span>v{{ appVersion }}</span>
+          </p>
           <button v-if="connected" class="cursor-pointer border-0 bg-transparent p-2.5 text-left text-ink hover:bg-black/5" :disabled="loading" @click="onRefresh">
             {{ loading ? 'Refreshing…' : 'Refresh library' }}
           </button>

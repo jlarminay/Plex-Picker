@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatDuration, type Movie } from "../composables/useMovieLibrary";
+import { posterUrl } from "../lib/plex";
 
 withDefaults(defineProps<{ movie: Movie; variant?: "grid" | "pick" }>(), {
   variant: "grid",
@@ -10,7 +11,7 @@ withDefaults(defineProps<{ movie: Movie; variant?: "grid" | "pick" }>(), {
   <article>
     <img
       v-if="movie.thumb"
-      :src="movie.thumb"
+      :src="posterUrl(movie.thumb)"
       :alt="movie.title"
       class="aspect-2/3 w-full bg-imgbg object-cover"
     />

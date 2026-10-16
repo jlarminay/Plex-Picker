@@ -1,4 +1,4 @@
-package com.larminay.plexpicker;
+package com.joshlarminay.plexpicker;
 
 import com.getcapacitor.BridgeActivity;
 

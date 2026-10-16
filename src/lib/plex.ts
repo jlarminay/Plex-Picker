@@ -110,8 +110,6 @@ type PlexItem = {
   Guid?: Array<{ id?: string }> | { id?: string }
   rating?: number
   duration?: number
-  summary?: string | number
-  studio?: string | number
   thumb?: string
   key?: string
   ratingKey?: number | string
@@ -128,6 +126,12 @@ function plexUrl(path: string): string {
   const base = server.uri.replace(/\/$/, '')
   const separator = path.includes('?') ? '&' : '?'
   return `${base}${path}${separator}X-Plex-Token=${encodeURIComponent(server.accessToken)}`
+}
+
+// Movies keep their poster as the server-relative path Plex reports, so a cached
+// library still shows posters after the connection or token changes.
+export function posterUrl(thumb: string): string {
+  return plexUrl(thumb)
 }
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', parseAttributeValue: true, htmlEntities: true })
@@ -161,9 +165,7 @@ function normalize(item: PlexItem, sectionKey: string): Movie {
     collections: asArray(item.Collection).map((entry) => entry.tag).filter((tag): tag is string => Boolean(tag)),
     rating: item.rating ?? null,
     duration: item.duration ? Math.round(item.duration / 60000) : null,
-    summary: String(item.summary ?? ''),
-    studio: String(item.studio ?? ''),
-    thumb: item.thumb ? plexUrl(item.thumb) : null,
+    thumb: item.thumb ?? null,
     addedAt: item.addedAt ?? null,
     watched: Boolean(item.viewCount),
   }

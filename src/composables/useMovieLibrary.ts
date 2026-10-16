@@ -17,8 +17,7 @@ export type Movie = {
   collections: string[]
   rating: number | null
   duration: number | null
-  summary: string
-  studio: string
+  // Server-relative poster path — turn into a URL with posterUrl().
   thumb: string | null
   addedAt: number | null
   watched: boolean
@@ -186,27 +185,55 @@ function abbreviateDirectorName(name: string): string {
   return `${parts[0].charAt(0)}. ${parts.slice(1).join(' ')}`
 }
 
+let lastIndexedAt = 0
+
 async function fetchAndCacheMovies() {
+  const startedFor = getSession().server?.clientIdentifier
   const fresh = await indexMovies()
-  movies.value = fresh
+  // Signed out or switched servers while indexing — this result is for the wrong library.
   const server = getSession().server
-  if (server) saveCachedMovies(server.clientIdentifier, fresh)
+  if (!server || server.clientIdentifier !== startedFor) return
+  lastIndexedAt = Date.now()
+  // An unchanged library keeps the current list, so nothing on screen re-renders.
+  if (JSON.stringify(fresh) !== JSON.stringify(movies.value)) movies.value = fresh
+  await saveCachedMovies(server.clientIdentifier, fresh)
 }
 
-// Cache-first: an already-indexed library shows instantly with no re-fetch.
-// Use refreshLibrary() to force a live re-index (e.g. after adding new movies in Plex).
+let backgroundRefresh: Promise<void> | undefined
+
+// Quietly re-indexes behind whatever is already showing, to pick up new movies
+// and watched status. A failure (offline, server asleep) just leaves the cache up.
+function refreshInBackground() {
+  backgroundRefresh ??= fetchAndCacheMovies()
+    .catch(() => {})
+    .finally(() => {
+      backgroundRefresh = undefined
+    })
+  return backgroundRefresh
+}
+
+// Cache-first: an already-indexed library shows instantly, then is brought up
+// to date in the background.
 async function loadMovies() {
   const server = getSession().server
   if (server) {
-    const cached = loadCachedMovies(server.clientIdentifier)
-    // A cache written before tmdbId/sectionKey existed lacks them — re-index once.
-    if (cached && (cached.length === 0 || 'tmdbId' in cached[0])) {
+    const cached = await loadCachedMovies(server.clientIdentifier)
+    if (cached) {
       movies.value = cached
+      void refreshInBackground()
       return
     }
   }
   await fetchAndCacheMovies()
 }
+
+// The app usually stays open between movie nights rather than relaunching, so
+// coming back to it also re-indexes once the library is a few minutes old.
+const STALE_AFTER_MS = 5 * 60 * 1000
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !getSession().server || !movies.value.length) return
+  if (Date.now() - lastIndexedAt > STALE_AFTER_MS) void refreshInBackground()
+})
 
 async function refreshLibrary() {
   loading.value = true

@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { formatDuration, useMovieLibrary, type Movie } from "../composables/useMovieLibrary";
 import { isTv } from "../lib/device";
 import { canOpenInPlex, openInPlex } from "../lib/openInPlex";
+import { posterUrl } from "../lib/plex";
 
 const props = defineProps<{
   movie: Movie;
@@ -93,7 +94,8 @@ onMounted(async () => {
   itemHeight.value = viewportRef.value?.getBoundingClientRect().height ?? 0;
   const urls = (hasReel ? reelItems : [props.movie])
     .map((item) => item.thumb)
-    .filter((url): url is string => Boolean(url));
+    .filter((thumb): thumb is string => Boolean(thumb))
+    .map(posterUrl);
   const loaded = Promise.all(urls.map(preload));
   const timeout = new Promise<void>((resolve) => setTimeout(resolve, 3000));
   await Promise.race([loaded, timeout]);
@@ -151,7 +153,7 @@ onBeforeUnmount(() => {
             :style="{ height: itemHeight + 'px' }"
           >
             <img
-              :src="item.thumb!"
+              :src="posterUrl(item.thumb!)"
               :alt="item.title"
               class="h-full w-full object-cover"
             />
@@ -159,7 +161,7 @@ onBeforeUnmount(() => {
         </div>
         <img
           v-else-if="movie.thumb"
-          :src="movie.thumb"
+          :src="posterUrl(movie.thumb)"
           :alt="movie.title"
           class="h-full w-full object-cover opacity-0 transition-opacity duration-700"
           :class="{ 'opacity-100': fadeIn }"
@@ -181,8 +183,9 @@ onBeforeUnmount(() => {
     <div v-auto-animate class="pt-2.5">
       <template v-if="reveal">
         <div>
+        <!-- phones always reserve two lines, so every card in a row lines up -->
         <h3
-          class="mb-1.25 line-clamp-2 min-h-[2.6em] portrait:line-clamp-1 portrait:min-h-0 text-[15px] leading-[1.3]"
+          class="mb-1.25 line-clamp-2 min-h-[2.6em] portrait:line-clamp-1 portrait:min-h-0 max-tablet:line-clamp-2! max-tablet:min-h-[2.6em]! text-[15px] leading-[1.3]"
         >
           {{ movie.title }}
         </h3>

@@ -21,10 +21,10 @@ Because step 2 goes through Plex's own remote-access/relay network instead of a 
 
 ## Where things are stored
 
-Everything lives in the browser's `localStorage`, scoped to whatever origin the app is served from:
+Everything lives in the browser, scoped to whatever origin the app is served from:
 
-- **Session** (`plex-picker:session`) — your plex.tv account token, account info, and the resolved server connection. There's no server-side session file anymore, so this token is readable by any JavaScript running on the page — a real tradeoff of going backend-less, worth keeping in mind if this is ever deployed somewhere less trusted than your own device.
-- **Movie library cache** (`plex-picker:movies:<server id>`) — the indexed library, so reopening the app doesn't re-index every time. Use **Refresh library** (in the account menu) to force a live re-index after adding movies in Plex.
+- **Session** (`localStorage`, `plex-picker:session`) — your plex.tv account token, account info, and the resolved server connection. There's no server-side session file anymore, so this token is readable by any JavaScript running on the page — a real tradeoff of going backend-less, worth keeping in mind if this is ever deployed somewhere less trusted than your own device.
+- **Movie library cache** (IndexedDB, database `plex-picker`) — the indexed library, so reopening the app shows it instantly. It's then re-indexed in the background on launch, and again when you return to the app after a few minutes, so new movies and watched status stay current. **Refresh library** (in the account menu) forces a re-index on demand.
 
 Click **Sign out** to clear the session (the library cache is left in place so a future sign-in to the same server loads instantly).
 
