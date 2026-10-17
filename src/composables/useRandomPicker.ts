@@ -150,6 +150,19 @@ function rerollPicker() {
   pickIds.value = newIds
 }
 
+// Reorders the current picks without changing any of them. Each slot's hold
+// flag and pickId travel with its movie, so no SlotReel remounts or re-spins.
+// Re-shuffles until the order actually changes, so the button never no-ops.
+function shufflePicker() {
+  const count = pickedMovies.value.length
+  if (count < 2) return
+  let order = shuffle([...Array(count).keys()])
+  while (order.every((from, to) => from === to)) order = shuffle(order)
+  pickedMovies.value = order.map((from) => pickedMovies.value[from])
+  heldFlags.value = order.map((from) => heldFlags.value[from])
+  pickIds.value = order.map((from) => pickIds.value[from])
+}
+
 function retryPicker() {
   pickedMovies.value = []
   heldFlags.value = []
@@ -179,6 +192,7 @@ export function useRandomPicker() {
     findMoviesToWatch,
     toggleHold,
     rerollPicker,
+    shufflePicker,
     retryPicker,
   }
 }

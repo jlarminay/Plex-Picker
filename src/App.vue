@@ -4,19 +4,15 @@ import { installDpadNavigation } from './lib/dpadNav'
 import AppHeader from './components/AppHeader.vue'
 import SignInPanel from './components/SignInPanel.vue'
 import ServerPicker from './components/ServerPicker.vue'
-import HomeMenu from './components/HomeMenu.vue'
 import PageBar from './components/PageBar.vue'
-import RandomPicker from './components/RandomPicker.vue'
-import LibraryAnalytics from './components/LibraryAnalytics.vue'
-import ListSync from './components/ListSync.vue'
 // import MovieGrid from './components/MovieGrid.vue' // disabled: duplicates Plex's own browsing UI
 // import EmptyState from './components/EmptyState.vue' // disabled: nothing shown below the sign-in box for now
 import { usePlexAuth } from './composables/usePlexAuth'
-import { useView } from './composables/useView'
+import { useRoute } from 'vue-router'
 
 const { account, connected, refreshStatus } = usePlexAuth()
-const { view } = useView()
-const scrolls = computed(() => connected.value && (view.value === 'stats' || view.value === 'sync'))
+const route = useRoute()
+const scrolls = computed(() => connected.value && (route.name === 'stats' || route.name === 'sync'))
 
 onMounted(refreshStatus)
 
@@ -33,26 +29,16 @@ onBeforeUnmount(stopDpadNavigation)
         : 'h-[calc(100vh/0.9)] overflow-y-auto pb-6 max-md:pb-5'
     "
   >
-    <template v-if="!connected || view === 'home'">
+    <template v-if="!connected">
       <AppHeader />
       <SignInPanel v-if="!account" />
-      <ServerPicker v-else-if="!connected" />
-      <HomeMenu v-else />
-    </template>
-
-    <template v-else-if="view === 'pick'">
-      <PageBar />
-      <RandomPicker />
-    </template>
-
-    <template v-else-if="view === 'sync'">
-      <PageBar />
-      <ListSync />
+      <ServerPicker v-else />
     </template>
 
     <template v-else>
-      <PageBar />
-      <LibraryAnalytics />
+      <AppHeader v-if="route.name === 'home'" />
+      <PageBar v-else />
+      <RouterView />
     </template>
   </main>
 </template>

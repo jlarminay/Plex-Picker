@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import autoAnimate from "@formkit/auto-animate";
 import { vAutoAnimate } from "@formkit/auto-animate/vue";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMovieLibrary } from "../composables/useMovieLibrary";
@@ -27,6 +28,7 @@ const {
   findMoviesToWatch,
   toggleHold,
   rerollPicker,
+  shufflePicker,
   retryPicker,
 } = useRandomPicker();
 
@@ -41,6 +43,7 @@ const allSettled = ref(true);
 const revealInfo = ref(false);
 const findButtonRef = ref<HTMLElement | null>(null);
 const rerollButtonRef = ref<HTMLElement | null>(null);
+const gridRef = ref<HTMLElement | null>(null);
 
 // Held reels keep their existing movie (same v-for :key, so they never
 // remount/re-spin) and so never re-fire "settled" — only wait on the ones
@@ -49,7 +52,16 @@ function spinningCount(list: typeof pickedMovies.value) {
   return list.filter((_, index) => !heldFlags.value[index]).length;
 }
 
+// The slot ids on screen, to tell a shuffle (same slots, new order — nothing
+// spins) apart from a new pick or re-roll.
+let shownIds = new Set<number>();
+
 watch(pickedMovies, async (movies, previous) => {
+  const reordered =
+    pickIds.value.length === shownIds.size &&
+    pickIds.value.every((id) => shownIds.has(id));
+  shownIds = new Set(pickIds.value);
+  if (movies.length && reordered) return;
   settledCount.value = 0;
   const spinning = spinningCount(movies);
   allSettled.value = spinning === 0;
@@ -96,6 +108,15 @@ function onGridKeydown(event: KeyboardEvent) {
   if (!target) return;
   active.blur();
   target.focus();
+}
+
+// Slides the posters to their new places. Only animated for the shuffle
+// itself — left on, it would also fade reels in and out on every re-roll.
+function onShuffle() {
+  if (!allSettled.value || !gridRef.value) return;
+  const animation = autoAnimate(gridRef.value);
+  shufflePicker();
+  setTimeout(() => animation.destroy?.(), 400);
 }
 
 function onReelSettled() {
@@ -147,15 +168,22 @@ function onReelSettled() {
           </template>
           <div v-else key="actions-results" class="flex items-center gap-2.5">
             <button
-              class="flex h-14 w-auto items-center overflow-hidden border border-ink bg-transparent px-6 py-4 text-left text-ink cursor-pointer aria-disabled:cursor-wait aria-disabled:opacity-50"
+              class="flex h-14 w-auto items-center overflow-hidden border border-ink bg-transparent px-6 py-4 text-left text-ink cursor-pointer max-tablet:px-4 aria-disabled:cursor-wait aria-disabled:opacity-50"
               :aria-disabled="!allSettled"
               @click="allSettled && retryPicker()"
             >
               Reset
             </button>
             <button
+              class="flex h-14 w-auto items-center overflow-hidden border border-ink bg-transparent px-6 py-4 text-left text-ink cursor-pointer max-tablet:px-4 aria-disabled:cursor-wait aria-disabled:opacity-50"
+              :aria-disabled="!allSettled"
+              @click="onShuffle"
+            >
+              Shuffle
+            </button>
+            <button
               ref="rerollButtonRef"
-              class="flex h-14 w-auto items-center overflow-hidden border-0 bg-ink px-6 py-4 text-left text-button-text cursor-pointer aria-disabled:cursor-wait aria-disabled:opacity-50"
+              class="flex h-14 w-auto items-center overflow-hidden border-0 bg-ink px-6 py-4 text-left text-button-text cursor-pointer max-tablet:px-4 aria-disabled:cursor-wait aria-disabled:opacity-50"
               :aria-disabled="!allSettled"
               @click="allSettled && rerollPicker()"
             >
@@ -278,6 +306,7 @@ function onReelSettled() {
 
     <template v-else key="results">
       <div
+        ref="gridRef"
         class="grid grid-cols-2 gap-5 sm:grid-cols-5 portrait:grid-cols-3"
         @keydown="onGridKeydown"
       >

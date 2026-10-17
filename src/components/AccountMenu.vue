@@ -3,12 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useAsyncStatus } from '../composables/useAsyncStatus'
 import { useMovieLibrary } from '../composables/useMovieLibrary'
 import { usePlexAuth } from '../composables/usePlexAuth'
-import { useView } from '../composables/useView'
+import { goHome } from '../router'
 
 const { loading } = useAsyncStatus()
 const { movies, refreshLibrary } = useMovieLibrary()
 const { account, connected, logout } = usePlexAuth()
-const { goTo } = useView()
 
 const appVersion = __APP_VERSION__
 
@@ -52,7 +51,7 @@ async function onRefresh() {
 async function onLogout() {
   menuOpen.value = false
   await logout()
-  goTo('home')
+  goHome()
 }
 </script>
 
