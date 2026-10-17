@@ -143,6 +143,19 @@ async function plexFetch(path: string, method = 'GET') {
   return text ? parser.parse(text) : {}
 }
 
+// Unparsed GET for the hidden /debug page, so it shows exactly what Plex sent.
+export async function plexRawGet(path: string): Promise<{ status: number; text: string; parsed: unknown }> {
+  const response = await fetch(plexUrl(path), { headers: { Accept: 'application/xml' } })
+  const text = await response.text()
+  let parsed: unknown = null
+  try {
+    parsed = text ? parser.parse(text) : {}
+  } catch {
+    // not XML — the raw text is still shown
+  }
+  return { status: response.status, text, parsed }
+}
+
 // Guids look like "tmdb://496243" — only present when requested with includeGuids=1.
 function tmdbIdOf(item: PlexItem): string | null {
   const guid = asArray(item.Guid).map((entry) => String(entry.id ?? '')).find((id) => id.startsWith('tmdb://'))
@@ -177,13 +190,39 @@ async function movieSectionKeys(): Promise<string[]> {
   return directories.filter((directory) => directory.type === 'movie').map((directory) => String(directory.key))
 }
 
+// Maps each movie's ratingKey to the titles of the collections it's in, read from
+// the collections themselves. The Collection tags on /all can't be trusted: after
+// a collection is renamed, Plex keeps the old name on movies that were already in it.
+async function collectionTitlesByMovie(sectionKey: string): Promise<Map<string, string[]>> {
+  const result = await plexFetch(`/library/sections/${sectionKey}/collections`)
+  const directories = asArray(result.MediaContainer?.Directory) as Array<{ ratingKey?: string | number; title?: string | number }>
+  const titlesByMovie = new Map<string, string[]>()
+  await Promise.all(
+    directories
+      .filter((directory) => directory.ratingKey !== undefined)
+      .map(async (directory) => {
+        const title = String(directory.title ?? 'Untitled')
+        for (const ratingKey of await getCollectionItemKeys(String(directory.ratingKey))) {
+          titlesByMovie.set(ratingKey, [...(titlesByMovie.get(ratingKey) ?? []), title])
+        }
+      }),
+  )
+  return titlesByMovie
+}
+
 export async function indexMovies(): Promise<Movie[]> {
   const sections = await movieSectionKeys()
   return (
     await Promise.all(
       sections.map(async (sectionKey) => {
-        const result = await plexFetch(`/library/sections/${sectionKey}/all?includeGuids=1`)
-        return (asArray(result.MediaContainer?.Video) as PlexItem[]).map((item) => normalize(item, sectionKey))
+        const [result, titlesByMovie] = await Promise.all([
+          plexFetch(`/library/sections/${sectionKey}/all?includeGuids=1`),
+          collectionTitlesByMovie(sectionKey),
+        ])
+        return (asArray(result.MediaContainer?.Video) as PlexItem[]).map((item) => {
+          const movie = normalize(item, sectionKey)
+          return { ...movie, collections: (movie.ratingKey && titlesByMovie.get(movie.ratingKey)) || [] }
+        })
       }),
     )
   ).flat()

@@ -12,7 +12,7 @@ import { useRoute } from 'vue-router'
 
 const { account, connected, refreshStatus } = usePlexAuth()
 const route = useRoute()
-const scrolls = computed(() => connected.value && (route.name === 'stats' || route.name === 'sync'))
+const scrolls = computed(() => connected.value && (route.name === 'stats' || route.name === 'sync' || route.name === 'debug'))
 
 onMounted(refreshStatus)
 

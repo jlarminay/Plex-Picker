@@ -5,6 +5,7 @@ import HomeMenu from './components/HomeMenu.vue'
 import RandomPicker from './components/RandomPicker.vue'
 import LibraryAnalytics from './components/LibraryAnalytics.vue'
 import ListSync from './components/ListSync.vue'
+import PlexDebug from './components/PlexDebug.vue'
 
 // Every screen has a URL, so a reload (or the app being restored) lands back on
 // it. Android's Back button is wired up at the bottom of this file. Signed-out
@@ -17,6 +18,8 @@ export const router = createRouter({
     { path: '/pick', name: 'pick', component: RandomPicker },
     { path: '/stats', name: 'stats', component: LibraryAnalytics },
     { path: '/sync', name: 'sync', component: ListSync },
+    // Hidden: not linked from the menu — open it by URL.
+    { path: '/debug', name: 'debug', component: PlexDebug },
     { path: '/:rest(.*)*', redirect: '/' },
   ],
   scrollBehavior: () => ({ top: 0 }),
